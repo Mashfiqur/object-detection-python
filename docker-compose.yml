@@ -1,0 +1,7 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "8876:8000"
+    volumes:
+      - ./app:/app
