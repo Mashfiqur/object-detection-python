@@ -5,9 +5,9 @@ from PIL import Image
 import time
 
 # Load YOLOv8 model (downloads automatically if not found)
-model = YOLO("yolov8n.pt")
+model = YOLO("yolov8m.pt")
 
-def detect_and_crop_objects(image_path, output_folder="output"):
+def detect_and_crop_objects(image_path, output_folder="output", conf_threshold=0.25):
     """
     Detects objects in an image and crops them into separate images.
     
@@ -17,17 +17,26 @@ def detect_and_crop_objects(image_path, output_folder="output"):
     """
     # Load image
     image = cv2.imread(image_path)
-    results = model(image)
+    results = model(image, conf=conf_threshold)
 
-    cropped_images = []
-
-    for i, box in enumerate(results[0].boxes.xyxy):
-        x1, y1, x2, y2 = map(int, box.tolist())
-        cropped_img = image[y1:y2, x1:x2]
-
-        # Convert cropped image to PIL and save
-        cropped_path = f"{output_folder}/object_{i}_{int(time.time())}.jpg"
-        Image.fromarray(cropped_img).save(cropped_path)
-        cropped_images.append(cropped_path)
-
-    return cropped_images
+    detections = []
+    
+    for r in results:
+        boxes = r.boxes
+        for box in boxes:
+            # Get confidence
+            confidence = float(box.conf[0])
+            # Get class name
+            class_name = model.names[int(box.cls[0])]
+            # Get coordinates
+            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
+            
+            cropped_img = image[y1:y2, x1:x2]
+            
+            # Save cropped image
+            cropped_path = f"{output_folder}/{class_name}_{confidence:.2f}_{int(time.time())}.jpg"
+            Image.fromarray(cropped_img).save(cropped_path)
+            
+            detections.append((cropped_path, class_name, confidence))
+            
+    return detections

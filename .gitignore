@@ -1,2 +1,3 @@
 app/output
 app/uploads
+app/__pycache__
