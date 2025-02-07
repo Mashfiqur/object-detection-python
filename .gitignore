@@ -1,3 +1,4 @@
-app/output
+app/extracts
 app/uploads
 app/__pycache__
+app/*.pt
