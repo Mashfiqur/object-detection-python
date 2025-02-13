@@ -5,6 +5,8 @@ import shutil
 import os
 from detection import detect_and_crop_objects
 from search import build_product_index, find_similar_products
+from io import BytesIO
+from PIL import Image
 
 app = FastAPI()
 
@@ -16,17 +18,6 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
-UPLOAD_FOLDER = "uploads"
-SEARCH_FOLDER = "searchs"
-EXTRACT_FOLDER = "extracts"
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(SEARCH_FOLDER, exist_ok=True)
-os.makedirs(EXTRACT_FOLDER, exist_ok=True)
-
-# Serve extracted images as static files
-app.mount("/extracts", StaticFiles(directory=EXTRACT_FOLDER), name="extracts")
-
 # Build product index at startup
 @app.on_event("startup")
 def startup_event():
@@ -35,25 +26,20 @@ def startup_event():
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    file_path = f"{UPLOAD_FOLDER}/{file.filename}"
+    file_bytes = await file.read()
+    pil_img = Image.open(BytesIO(file_bytes)).convert("RGB")
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Process image from memory instead of disk
+    cropped_images = detect_and_crop_objects(pil_img)
 
-    cropped_images = detect_and_crop_objects(file_path, EXTRACT_FOLDER)
-
-    return {"message": "Objects detected", "cropped_images": cropped_images}
-
+    return {"cropped_images": cropped_images}
 
 @app.post("/search")
 async def search_similar_product(file: UploadFile = File(...)):
-    """Search for similar products based on uploaded image."""
-    file_path = f"{SEARCH_FOLDER}/{file.filename}"
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    file_bytes = await file.read()
+    image = Image.open(BytesIO(file_bytes)).convert("RGB")
 
     # Find similar products
-    results = find_similar_products(file_path)
+    results = find_similar_products(image)
 
     return {"similar_products": results}

@@ -8,6 +8,7 @@ from torchvision import models
 from PIL import Image
 import requests
 import os
+from io import BytesIO
 
 # Load a pretrained feature extraction model (MobileNetV2)
 model = models.mobilenet_v2(pretrained=True).features
@@ -24,9 +25,15 @@ transform = transforms.Compose([
     transforms.ToTensor(),
 ])
 
-def extract_features(image_path):
-    """Extract features from an image using MobileNetV2."""
-    img = Image.open(image_path).convert("RGB")
+def extract_features(image):
+    """Extract features from an image tensor using MobileNetV2."""
+    if isinstance(image, str):  # If path is given
+        img = Image.open(image).convert("RGB")
+    elif isinstance(image, bytes):  # If bytes are given
+        img = Image.open(BytesIO(image)).convert("RGB")
+    else:
+        raise ValueError("Invalid image format")
+
     img = transform(img).unsqueeze(0)
 
     with torch.no_grad():
@@ -43,33 +50,34 @@ def build_product_index():
     global index, image_features, product_data
     products = load_products()
 
-    os.makedirs("temp", exist_ok=True)
-
     for product in products:
         img_url = product["image_src"]
-        img_path = f"temp/{product['id']}.jpg"
+        
+        # Download image
+        img_data = requests.get(img_url, stream=True).content
 
-        # Download image if not exists
-        if not os.path.exists(img_path):
-            img_data = requests.get(img_url, stream=True).content
-            with open(img_path, "wb") as file:
-                file.write(img_data)
-
-        # Extract features
-        features = extract_features(img_path)
+        # Extract features from memory
+        features = extract_features(img_data)
         index.add(features)  # Add to FAISS index
         image_features.append(features)
         product_data.append(product)  # Store product info
 
-def find_similar_products(query_img_path, top_k=5):
+def find_similar_products(query_img, top_k=5):
     """Find the top K most similar products for the given image."""
-    query_features = extract_features(query_img_path)
+    # Convert PIL image to bytes
+    img_bytes_io = BytesIO()
+    query_img.save(img_bytes_io, format="JPEG")
+    query_bytes = img_bytes_io.getvalue()
+
+    query_features = extract_features(query_bytes)
 
     # Search for similar images
     distances, indices = index.search(query_features, top_k)
 
     results = []
     for i, (idx, dist) in enumerate(zip(indices[0], distances[0])):
+        if dist > 400:
+            continue
         if idx < len(product_data):
             similarity_score = 1 / (1 + dist)  # Convert distance to similarity (optional)
             results.append({
@@ -80,4 +88,3 @@ def find_similar_products(query_img_path, top_k=5):
             })
 
     return results
-

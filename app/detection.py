@@ -2,23 +2,20 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from PIL import Image
-import time
-import os
+import io
+import base64
 
 # Load YOLOv8 model
 model = YOLO("yolov8m.pt")
 
-BASE_URL = "http://localhost:8876"
+def detect_and_crop_objects(pil_img, conf_threshold=0.6):
+    # Convert bytes to a NumPy array
+    image = np.array(pil_img)
 
-def detect_and_crop_objects(image_path, output_folder="extracts", conf_threshold=0.25):
-    """
-    Detects objects in an image and crops them into separate images.
-    
-    :param image_path: Path to the uploaded image
-    :param output_folder: Folder to save cropped images
-    :return: List of cropped image data (URLs, class names, accuracy)
-    """
-    image = cv2.imread(image_path)
+    # Convert RGB to BGR (OpenCV format)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+    # Run YOLO detection
     results = model(image, conf=conf_threshold)
     
     detections = []
@@ -27,23 +24,20 @@ def detect_and_crop_objects(image_path, output_folder="extracts", conf_threshold
         boxes = r.boxes
         for box in boxes:
             confidence = float(box.conf[0])
-            if confidence < 0.6:
-                continue
 
             class_name = model.names[int(box.cls[0])]
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
             
             cropped_img = image[y1:y2, x1:x2]
-            
-            filename = f"{class_name}_{confidence:.2f}_{int(time.time())}.jpg"
-            cropped_path = os.path.join(output_folder, filename)
-            Image.fromarray(cropped_img).save(cropped_path)
 
-            # Generate URL
-            file_url = f"{BASE_URL}/{cropped_path}"
+            # Convert cropped image to base64
+            pil_cropped_img = Image.fromarray(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))  # Convert back to RGB
+            buffered = io.BytesIO()
+            pil_cropped_img.save(buffered, format="JPEG")
+            img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
             detections.append({
-                "object": file_url,
+                "object": f"data:image/jpeg;base64,{img_base64}",
                 "class": class_name,
                 "accuracy": confidence
             })
