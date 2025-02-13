@@ -69,11 +69,15 @@ def find_similar_products(query_img_path, top_k=5):
     distances, indices = index.search(query_features, top_k)
 
     results = []
-    for i, idx in enumerate(indices[0]):
+    for i, (idx, dist) in enumerate(zip(indices[0], distances[0])):
         if idx < len(product_data):
+            similarity_score = 1 / (1 + dist)  # Convert distance to similarity (optional)
             results.append({
                 "rank": i + 1,
-                "product": product_data[idx]
+                "product": product_data[idx],
+                "distance": float(dist),  # L2 distance (lower is better)
+                "confidence": float(similarity_score)  # Optional similarity score (higher is better)
             })
 
     return results
+

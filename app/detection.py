@@ -27,6 +27,9 @@ def detect_and_crop_objects(image_path, output_folder="extracts", conf_threshold
         boxes = r.boxes
         for box in boxes:
             confidence = float(box.conf[0])
+            if confidence < 0.6:
+                continue
+
             class_name = model.names[int(box.cls[0])]
             x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
             

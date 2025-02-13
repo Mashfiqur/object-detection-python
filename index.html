@@ -7,9 +7,9 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
+            background-color: #eef2f7;
             margin: 0;
-            padding: 0;
+            padding: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -36,6 +36,7 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            transition: background 0.3s;
         }
 
         #uploadButton:hover {
@@ -47,25 +48,35 @@
             max-width: 100%;
             max-height: 400px;
             object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
-        #result {
+        .container {
+            display: flex;
+            justify-content: space-between;
+            width: 80%;
+            max-width: 1200px;
             margin-top: 20px;
-            padding: 10px;
+        }
+
+        #result, #searchResult {
+            flex: 1;
+            padding: 15px;
             background-color: #fff;
             border-radius: 5px;
             border: 1px solid #ddd;
-            width: 80%;
-            max-width: 800px;
-            text-align: left;
-            display: none;
+            min-height: 300px;
+            overflow-y: auto;
+            transition: all 0.3s ease-in-out;
         }
 
-        .loading {
-            text-align: center;
-            font-size: 18px;
-            color: #333;
-            font-weight: bold;
+        #result {
+            margin-right: 10px;
+        }
+
+        #searchResult {
+            margin-left: 10px;
         }
 
         .detected-object {
@@ -73,9 +84,11 @@
             padding: 10px;
             background-color: #f9f9f9;
             border-radius: 5px;
-            border: 1px solid #ddd;
+            border: 2px solid transparent;
             display: flex;
             align-items: center;
+            cursor: pointer;
+            transition: border 0.3s, transform 0.2s;
         }
 
         .detected-object img {
@@ -86,45 +99,50 @@
             border-radius: 5px;
         }
 
-        .detected-object div {
-            flex-grow: 1;
+        .detected-object.selected {
+            border: 2px solid #007BFF;
+            transform: scale(1.05);
         }
 
-        .detected-object h4 {
-            margin: 0;
-            font-size: 18px;
-            color: #333;
+        .search-fade {
+            opacity: 0;
+            transform: translateY(10px);
+            animation: fadeIn 0.5s forwards;
         }
 
-        .detected-object p {
-            margin: 5px 0;
-            font-size: 14px;
-            color: #555;
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
     </style>
 </head>
 <body>
-
     <h2>Upload an Image for Object Detection</h2>
-
     <input type="file" id="fileInput" onchange="previewImage()">
     <button id="uploadButton" onclick="uploadFile()">Upload</button>
-
-    <!-- Image preview section -->
+    
     <div id="imagePreviewSection" style="display: none;">
         <h3>Uploaded Image:</h3>
         <img id="imagePreview" alt="Uploaded Image Preview">
     </div>
-
-    <div id="result"></div>
-
+    
+    <div class="container">
+        <div id="result"></div>
+        <div id="searchResult"></div>
+    </div>
+    
     <script>
-        // Function to show a preview of the uploaded image
         function previewImage() {
             const fileInput = document.getElementById("fileInput");
             const preview = document.getElementById("imagePreview");
             const imagePreviewSection = document.getElementById("imagePreviewSection");
-
+            
             const file = fileInput.files[0];
             if (file) {
                 const reader = new FileReader();
@@ -146,7 +164,6 @@
             let formData = new FormData();
             formData.append("file", fileInput);
 
-            // Show loading message
             let resultDiv = document.getElementById("result");
             resultDiv.innerHTML = '<div class="loading">Processing...</div>';
             resultDiv.style.display = 'block';
@@ -158,46 +175,74 @@
                 });
 
                 let result = await response.json();
-
-                // Clear loading message and display results
                 resultDiv.innerHTML = '';
 
                 if (result.cropped_images && result.cropped_images.length > 0) {
-                    result.cropped_images.forEach(item => {
+                    result.cropped_images.forEach((item, index) => {
                         const objectDiv = document.createElement("div");
                         objectDiv.classList.add("detected-object");
-
-                        // Create an image element
+                        objectDiv.onclick = () => {
+                            document.querySelectorAll('.detected-object').forEach(el => el.classList.remove('selected'));
+                            objectDiv.classList.add('selected');
+                            searchProduct(item.object);
+                        };
+                        
                         const objectImg = document.createElement("img");
                         objectImg.src = item.object;
                         objectImg.alt = item.class;
-
-                        // Create text info for object
+                        
                         const objectInfo = document.createElement("div");
+                        objectInfo.innerHTML = `<h4>Class: ${item.class}</h4><p>Accuracy: ${(item.accuracy * 100).toFixed(2)}%</p>`;
 
-                        const objectName = document.createElement("h4");
-                        objectName.textContent = `Class: ${item.class}`;
-                        const objectAccuracy = document.createElement("p");
-                        objectAccuracy.textContent = `Accuracy: ${(item.accuracy * 100).toFixed(2)}%`;
-
-                        objectInfo.appendChild(objectName);
-                        objectInfo.appendChild(objectAccuracy);
-
-                        // Append the image and info to the div
                         objectDiv.appendChild(objectImg);
                         objectDiv.appendChild(objectInfo);
-
                         resultDiv.appendChild(objectDiv);
+
+                        if (index === 0) {
+                            objectDiv.click();
+                        }
                     });
                 } else {
                     resultDiv.innerHTML = '<div class="loading">No objects detected.</div>';
                 }
             } catch (error) {
-                resultDiv.innerHTML = '<div class="loading">Error processing the image. Please try again.</div>';
+                console.error(error);
+            }
+        }
+
+        async function searchProduct(imageUrl) {
+
+            let searchResultDiv = document.getElementById("searchResult");
+            searchResultDiv.innerHTML = '<div class="loading">Searching...</div>';
+
+            try {
+                let imageResponse = await fetch(imageUrl);
+                let blob = await imageResponse.blob();
+
+                let file = new File([blob], "image.jpg", { type: blob.type });
+                let formData = new FormData();
+                formData.append("file", file);
+                
+                let response = await fetch("http://localhost:8876/search", {
+                    method: "POST",
+                    body: formData
+                });
+
+                let result = await response.json();
+
+                searchResultDiv.innerHTML = '';
+
+                result.similar_products.forEach(item => {
+                    const productDiv = document.createElement("div");
+                    productDiv.classList.add("detected-object", "search-fade");
+                    productDiv.innerHTML = `<img src="${item.product.image_src}"><div><h4>${item.product.title}</h4><p>Rank: ${item.rank}</p><p>Distance: ${item.distance}</p><p>Confidence: ${item.confidence}</p></div>`;
+                    searchResultDiv.appendChild(productDiv);
+                });
+            } catch (error) {
+                searchResultDiv.innerHTML = '<div class="loading">Error processing the search...</div>';
                 console.error(error);
             }
         }
     </script>
-
 </body>
 </html>

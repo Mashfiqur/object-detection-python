@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import shutil
 import os
-from utils import detect_and_crop_objects
+from detection import detect_and_crop_objects
 from search import build_product_index, find_similar_products
 
 app = FastAPI()
@@ -21,6 +21,7 @@ SEARCH_FOLDER = "searchs"
 EXTRACT_FOLDER = "extracts"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(SEARCH_FOLDER, exist_ok=True)
 os.makedirs(EXTRACT_FOLDER, exist_ok=True)
 
 # Serve extracted images as static files
